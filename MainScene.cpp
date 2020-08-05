@@ -8,6 +8,9 @@
 MainScene::MainScene(QWidget *parent)
     : QWidget(parent)
 {
+    //初始化敌机刷新记录变量
+    m_Recoder= 0;
+
     //初始化窗口
     initScene();
 
@@ -32,7 +35,7 @@ void MainScene::initScene()
     setWindowIcon(QIcon(GAME_ICON));
 
     //定时器的初始化
-    map_timer.setInterval(GAME_RATE);
+    timer.setInterval(GAME_RATE);
 
 
 }
@@ -40,13 +43,13 @@ void MainScene::initScene()
 void MainScene::playGame()
 {
     //启动定时器
-    map_timer.start();
+    timer.start();
 
     //播放背景音乐
     QSound::play(SOUND_BACKGROUND);
 
     //监听计时器的信号
-    connect(&map_timer, &QTimer::timeout, [=]{
+    connect(&timer, &QTimer::timeout, [=]{
 
        //更新坐标
         updatePosition();
@@ -57,6 +60,42 @@ void MainScene::playGame()
     });
 }
 
+void MainScene::stopGame()
+{
+
+    timer.stop();
+}
+
+void MainScene::launchEnemy()
+{
+    m_Recoder ++;
+
+    //如果还没达到间隔时间，不发射敌机，return掉该函数
+    if(m_Recoder < ENEMY_INTERVAL){
+        return ;
+    }
+
+    //充值记录变量
+    m_Recoder = 0;
+
+    //发射敌机
+    for(int i = 0;i < ENEMY_NUM; i++){
+        if(enemies[i].m_Free){
+            //如果是空闲状态就发射
+            //设置状态
+            enemies[i].m_Free = false;
+            //初始化位置
+            enemies[i].m_Y = 0;
+            //srand(time(NULL));
+            enemies[i].m_X = rand()%GAME_WIDTH;
+            if(enemies[i].m_X >= GAME_WIDTH - enemies[i].m_Rect.width()){
+                enemies[i].m_X = GAME_WIDTH - enemies[i].m_Rect.width();
+            }
+            break;
+        }
+    }
+}
+
 void MainScene::updatePosition()
 {
     //更新地图坐标
@@ -65,10 +104,30 @@ void MainScene::updatePosition()
     //发射子弹
     m_Hero.shoot();
 
+    //发射敌机
+    launchEnemy();
+
+    //碰撞检测
+    collisionDetc();
+
     //更新所有非空闲子弹的坐标
     for(int i = 0 ;i<BULLET_NUM; i++){
         if( !m_Hero.m_Bullets[i].m_Free ){
             m_Hero.m_Bullets[i].updatePosition();
+        }
+    }
+
+    //更新所有非空闲敌机的坐标
+    for(int i = 0 ;i<ENEMY_NUM; i++){
+        if(!enemies[i].m_Free){
+            enemies[i].updatePosition();
+        }
+    }
+
+    //更新所有非空闲爆炸特效
+    for(int i = 0 ;i < BOMB_NUM; i++){
+        if(!bomb[i].m_Free){
+            bomb[i].updateInfo();
         }
     }
 }
@@ -91,6 +150,20 @@ void MainScene::paintEvent(QPaintEvent *)
             painter.drawPixmap(m_Hero.m_Bullets[i].m_X, m_Hero.m_Bullets[i].m_Y, m_Hero.m_Bullets[i].m_Bullet);
         }
     }
+
+    //绘制敌机
+    for(int i = 0 ;i<ENEMY_NUM; i++){
+        if(!enemies[i].m_Free){
+            painter.drawPixmap(enemies[i].m_X, enemies[i].m_Y,enemies[i].m_Plane);
+        }
+    }
+
+    //绘制爆炸特效
+    for(int i = 0 ;i < BOMB_NUM; i++){
+        if(!bomb[i].m_Free){
+            painter.drawPixmap(bomb[i].m_X, bomb[i].m_Y, bomb[i].m_PixArr[bomb[i].m_Index]);
+        }
+    }
 }
 
 void MainScene::mouseMoveEvent(QMouseEvent * event)
@@ -102,5 +175,55 @@ void MainScene::mouseMoveEvent(QMouseEvent * event)
     if(y >= GAME_HEIGHT - m_Hero.m_Rect.height()) y = GAME_HEIGHT - m_Hero.m_Plane.height();
     else if(y <= 0) y = 0;
     m_Hero.setPosition(x,y);
+}
+
+void MainScene::collisionDetc()
+{
+    //遍历所有飞机
+    for(int i = 0; i < ENEMY_NUM ; i++){
+
+
+        //空闲飞机不检测碰撞
+        if( enemies[i].m_Free){
+            continue;
+        }
+
+        //检测是否与英雄飞机碰撞
+        if(enemies[i].m_Rect.intersects(m_Hero.m_Rect)){
+            //释放爆炸效果
+            for(int i = 0; i < BOMB_NUM; i++){
+                if(bomb[i].m_Free){
+                    bomb[i].m_Free = false;
+                    bomb[i].m_X = enemies[i].m_Rect.x();
+                    bomb[i].m_Y = enemies[i].m_Rect.y();
+                    break;
+                }
+            }
+            stopGame();
+        }
+
+        //检测是否和子弹碰撞
+        for(int j = 0; j < BULLET_NUM; j++){
+            //空闲子弹不检测碰撞
+            if(m_Hero.m_Bullets[j].m_Free)
+                continue;
+            if(enemies[i].m_Rect.intersects(m_Hero.m_Bullets[j].m_Rect)){
+                //跟新空闲状态
+                enemies[i].m_Free = true;
+                m_Hero.m_Bullets[j].m_Free = true;
+                //释放爆炸效果
+                for(int i = 0; i < BOMB_NUM; i++){
+                    if(bomb[i].m_Free){
+                        bomb[i].m_Free = false;
+                        bomb[i].m_X = enemies[i].m_Rect.x();
+                        bomb[i].m_Y = enemies[i].m_Rect.y();
+                        break;
+                    }
+                }
+                //播放爆炸音效
+                QSound::play(SOUND_BOMB);
+            }
+        }
+    }
 }
 

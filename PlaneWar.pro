@@ -15,14 +15,18 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
+    Bomb.cpp \
     Bullet.cpp \
+    EnemyPlane.cpp \
     HeroPlane.cpp \
     Map.cpp \
     main.cpp \
     MainScene.cpp
 
 HEADERS += \
+    Bomb.h \
     Bullet.h \
+    EnemyPlane.h \
     HeroPlane.h \
     MainScene.h \
     Map.h \
